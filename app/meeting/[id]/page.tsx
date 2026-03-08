@@ -24,6 +24,11 @@ export default function MeetingRoom({
   const [signVoiceEnabled, setSignVoiceEnabled] = useState(false)
   const [cameraOn, setCameraOn] = useState(true)
 
+  const [gestureMode, setGestureMode] = useState(false)
+  const [micOn, setMicOn] = useState(false)
+
+  const recognitionRef = useRef<any>(null)
+
   useEffect(() => {
     startCamera()
   }, [])
@@ -88,6 +93,8 @@ export default function MeetingRoom({
 
   function startSpeech() {
 
+    if (micOn) return
+
     const SpeechRecognition =
       (window as any).webkitSpeechRecognition ||
       (window as any).SpeechRecognition
@@ -107,49 +114,79 @@ export default function MeetingRoom({
 
       const lower = text.toLowerCase()
 
-      if (lower.includes("hello")) {
-        setAnimation("hello")
-      }
-
-      if (lower.includes("thank")) {
-        setAnimation("thankyou")
-      }
-
-      if (lower.includes("welcome")) {
-        setAnimation("welcome")
-      }
+      if (lower.includes("hello")) setAnimation("hello")
+      if (lower.includes("thank")) setAnimation("thankyou")
+      if (lower.includes("welcome")) setAnimation("welcome")
 
     }
 
     recognition.start()
+
+    recognitionRef.current = recognition
+
+    setMicOn(true)
+  }
+
+  function stopSpeech() {
+
+    recognitionRef.current?.stop()
+    setMicOn(false)
+
+  }
+
+  function toggleMic() {
+
+    if (micOn) stopSpeech()
+    else startSpeech()
+
   }
 
   /* GESTURE DETECTION */
 
-  function detectGesture(landmarks: any) {
+function detectGesture(landmarks: any) {
 
-    const indexTip = landmarks[8]
-    const middleTip = landmarks[12]
-    const ringTip = landmarks[16]
-    const pinkyTip = landmarks[20]
+  const indexTip = landmarks[8]
+  const middleTip = landmarks[12]
+  const ringTip = landmarks[16]
+  const pinkyTip = landmarks[20]
 
-    const indexBase = landmarks[6]
-    const middleBase = landmarks[10]
-    const ringBase = landmarks[14]
-    const pinkyBase = landmarks[18]
+  const indexBase = landmarks[6]
+  const middleBase = landmarks[10]
+  const ringBase = landmarks[14]
+  const pinkyBase = landmarks[18]
 
-    const fingersUp =
-      indexTip.y < indexBase.y &&
-      middleTip.y < middleBase.y &&
-      ringTip.y < ringBase.y &&
-      pinkyTip.y < pinkyBase.y
+  const thumbTip = landmarks[4]
+  const wrist = landmarks[0]
 
-    if (fingersUp) {
-      return "hello"
-    }
+  const indexUp = indexTip.y < indexBase.y
+  const middleUp = middleTip.y < middleBase.y
+  const ringUp = ringTip.y < ringBase.y
+  const pinkyUp = pinkyTip.y < pinkyBase.y
 
-    return "unknown"
+  const fingersUp = indexUp && middleUp && ringUp && pinkyUp
+
+  // HELLO (open palm)
+  if (fingersUp) {
+    return "hello"
   }
+
+  // THANK YOU (hand forward slightly)
+  if (indexUp && middleUp && !ringUp && !pinkyUp) {
+    return "thankyou"
+  }
+
+  // ME / MINE (thumb near chest)
+  if (thumbTip.y < wrist.y && !indexUp) {
+    return "me"
+  }
+
+  // SORRY (closed hand)
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    return "sorry"
+  }
+
+  return "unknown"
+}
 
   /* HAND TRACKING */
 
@@ -181,6 +218,8 @@ export default function MeetingRoom({
 
         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+        if (!gestureMode) return
+
         if (results.multiHandLandmarks) {
 
           setGesture("Hand detected")
@@ -200,11 +239,27 @@ export default function MeetingRoom({
             if (g === "hello") {
 
               setGesture("Hello sign detected")
-
               setSubtitle("Hello (from sign)")
               setAnimation("hello")
-
               speak("Hello")
+
+            }
+
+            if (g === "thankyou") {
+
+              setGesture("Thank you sign")
+              setSubtitle("Thank you")
+              setAnimation("thankyou")
+              speak("Thank you")
+
+            }
+
+            if (g === "me") {
+
+              setGesture("Me sign")
+              setSubtitle("Me")
+              setAnimation("me")
+              speak("Me")
 
             }
 
@@ -295,7 +350,7 @@ export default function MeetingRoom({
 
           <div
             style={{
-              background: "#334155",
+              background: "#55c0bc",
               padding: "15px",
               borderRadius: "10px",
               width: "420px",
@@ -305,32 +360,39 @@ export default function MeetingRoom({
             {subtitle}
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              marginTop: "15px",
-            }}
-          >
+          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
 
             <button
-              onClick={startSpeech}
+              onClick={toggleMic}
               style={{
                 padding: "10px 18px",
-                background: "#22c55e",
+                background: micOn ? "#ef4444" : "#22c55e",
                 border: "none",
                 borderRadius: "6px",
                 color: "white",
               }}
             >
-              Start Subtitles 🎤
+              {micOn ? "Mic OFF 🎤" : "Mic ON 🎤"}
+            </button>
+
+            <button
+              onClick={() => setGestureMode(!gestureMode)}
+              style={{
+                padding: "10px 18px",
+                background: gestureMode ? "#ef4444" : "#3b82f6",
+                border: "none",
+                borderRadius: "6px",
+                color: "white",
+              }}
+            >
+              {gestureMode ? "Disable Gesture ✋" : "Enable Gesture ✋"}
             </button>
 
             <button
               onClick={() => setSignVoiceEnabled(!signVoiceEnabled)}
               style={{
                 padding: "10px 18px",
-                background: signVoiceEnabled ? "#ef4444" : "#3b82f6",
+                background: signVoiceEnabled ? "#ef4444" : "#8b5cf6",
                 border: "none",
                 borderRadius: "6px",
                 color: "white",
@@ -395,4 +457,43 @@ export default function MeetingRoom({
 
   )
 
+}function detectGesture(landmarks) {
+
+  const thumbTip = landmarks[4]
+  const indexTip = landmarks[8]
+  const middleTip = landmarks[12]
+  const ringTip = landmarks[16]
+  const pinkyTip = landmarks[20]
+
+  const thumbBase = landmarks[2]
+  const indexBase = landmarks[6]
+  const middleBase = landmarks[10]
+  const ringBase = landmarks[14]
+  const pinkyBase = landmarks[18]
+
+  const indexUp = indexTip.y < indexBase.y
+  const middleUp = middleTip.y < middleBase.y
+  const ringUp = ringTip.y < ringBase.y
+  const pinkyUp = pinkyTip.y < pinkyBase.y
+
+  const thumbRight = thumbTip.x > thumbBase.x
+
+  // HELLO ✋
+  if(indexUp && middleUp && ringUp && pinkyUp){
+    return "hello"
+  }
+
+  // ME / MINE 👍
+  
+  // THANK YOU ✌
+  if(indexUp && middleUp && !ringUp){
+    return "thankyou"
+  }
+
+  // SORRY ✊
+  if(!indexUp && !middleUp && !ringUp && !pinkyUp){
+    return "sorry"
+  }
+
+  return "unknown"
 }

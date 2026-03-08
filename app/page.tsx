@@ -17,7 +17,7 @@ export default function MeetingJoin(){
 
     <div style={{padding:"40px"}}>
 
-      <h1>AI Sign Language Meeting</h1>
+      <h1>SignBridge2Vision</h1>
 
       <input
         placeholder="Enter Meeting ID"
